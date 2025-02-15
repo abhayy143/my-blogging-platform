@@ -10,36 +10,57 @@ const BlogList = () => {
   const [filteredBlogs, setFilteredBlogs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [blogsLoading, setBlogsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const blogsPerPage = 5;
 
   useEffect(() => {
     setBlogsLoading(true);
     const q = query(collection(db, 'blogs'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const blogsData = snapshot.docs.map((doc) => ({
+      const blogsData = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
+        ...doc.data()
       }));
       setBlogs(blogsData);
-      setFilteredBlogs(blogsData); // Initialize filteredBlogs with full list
       setBlogsLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const filtered = blogs.filter(blog =>
+      blog.title.toLowerCase().includes(searchQuery)
+    );
+    setFilteredBlogs(filtered);
+    setCurrentPage(1);
+  }, [searchQuery, blogs]);
 
   const handleSearch = (e) => {
     const query = e.target.value.toLowerCase();
     setSearchQuery(query);
-    const filtered = blogs.filter((blog) =>
-      blog.title.toLowerCase().includes(query)
-    );
-    setFilteredBlogs(filtered);
   };
 
   const handleDeleteSuccess = (deletedBlogId) => {
-    setBlogs((prevBlogs) => prevBlogs.filter((blog) => blog.id !== deletedBlogId));
-    setFilteredBlogs((prevBlogs) => prevBlogs.filter((blog) => blog.id !== deletedBlogId));
+    const updatedBlogs = blogs.filter(blog => blog.id !== deletedBlogId);
+    setBlogs(updatedBlogs);
   }
+
+  const indexOfLastBlog = currentPage * blogsPerPage;
+  const indexOfFirstBlog = indexOfLastBlog - blogsPerPage;
+  const currentBlogs = filteredBlogs.slice(indexOfFirstBlog, indexOfLastBlog);
+  const totalPages = Math.ceil(filteredBlogs.length / blogsPerPage);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+    }
+  };
 
   return (
     <div className="blog-list">
@@ -62,10 +83,11 @@ const BlogList = () => {
       />
       
       {blogsLoading && <LoadingSpinner color='#007BFF'/>}
-      {!filteredBlogs.length ? (
+
+      {(!currentBlogs.length && !blogsLoading) ? (
         <p>No blogs match your search. Try a different keyword!</p>
       ) : (
-        filteredBlogs.map((blog) => (
+        currentBlogs.map((blog) => (
           <div key={blog.id} className="blog-card">
             <div className='blog-infos'>
               <h3>{blog.title}</h3>
@@ -76,11 +98,18 @@ const BlogList = () => {
             </div>
             <div className='blog-actions'>
               <EditBlogButton blogId={blog.id} />
-              <DeleteBlogButton blogId={blog.id} onDeleteSuccess={handleDeleteSuccess} />
+              <DeleteBlogButton blogId={blog.id} onDeleteSuccess={() => handleDeleteSuccess(blog.id)} />
             </div>
           </div>
         ))
       )}
+
+      <div className="pagination">
+        <button className="pagination-button" onClick={handlePreviousPage} disabled={currentPage === 1}>Previous</button>
+        <span>Page {currentPage} of {totalPages || 1}</span>
+        <button className="pagination-button" onClick={handleNextPage} disabled={currentPage >= totalPages}>Next</button>
+      </div>
+
     </div>
   );
 };
